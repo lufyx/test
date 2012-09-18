@@ -1,0 +1,1199 @@
+<!DOCTYPE html> 
+<html> 
+	<head> 
+		<title>Up2News Mobile</title> 
+		
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+
+		<link rel="stylesheet" href="jquery.mobile-1.0.1/jquery.mobile-1.0.1.min.css" />
+		<link rel="stylesheet" href="plugin/photoswipe/photoswipe.css" />
+		
+		<script src="plugin/jquery-1.6.4.min.js"></script>
+		<script src="jquery.mobile-1.0.1/jquery.mobile-1.0.1.min.js"></script>
+		<script src="script/fonctions.js"></script>
+		
+		<script src="plugin/jquery.media.js"></script>
+		<script src="plugin/jquery.cookie.js"></script>
+		<script src="plugin/iscroll.js"></script>
+		<script src="plugin/jquery.bxSlider.min.js"></script>
+		<script src="plugin/photoswipe/lib/klass.min.js"></script>
+		<script src="plugin/photoswipe/code.photoswipe-3.0.5.js"></script>
+		
+		<script type="text/javascript">
+		
+		var mySlider;
+		var myScrollArt;
+		function loaded() {
+			myScrollArt = new iScroll('wrapperArt');
+		}
+
+		document.addEventListener('touchmove', function (e) { e.preventDefault(); }, false);
+
+		/* * * * * * * *
+		 *
+		 * Use this for high compatibility (iDevice + Android)
+		 *
+		 */
+		document.addEventListener('DOMContentLoaded', function () { setTimeout(loaded, 200); }, false);
+		/*
+		 * * * * * * * */
+
+
+		/* * * * * * * *
+		 *
+		 * Use this for iDevice only
+		 *
+		 */
+		//document.addEventListener('DOMContentLoaded', loaded, false);
+		/*
+		 * * * * * * * */
+
+
+		/* * * * * * * *
+		 *
+		 * Use this if nothing else works
+		 *
+		 */
+		//window.addEventListener('load', setTimeout(function () { loaded(); }, 200), false);
+		/*
+		 * * * * * * * */
+		
+		$(function()
+		{
+		  setTimeout(hideLogo, 2000);
+		});
+
+		function hideLogo()
+		{
+			if ($.cookie('cookie_mail') == null || $.cookie('cookie_mail') == "")
+			{
+				$.mobile.changePage("#page-connexion", "slide");
+			}
+			else
+			{
+				document.forms['form'].elements['mail'].value = $.cookie('cookie_mail');
+				
+				var formData = $("#form").serialize();
+ 
+				$.ajax({
+					type: "POST",
+					url: "http://94.247.234.44/appmobile/script/RecupXML.php",
+					cache: false,
+					data: formData,
+					success: onSuccess,
+					error: onError
+				});
+ 
+				return false;
+			}
+		}
+		
+		var cookie_mail = "";
+		
+		function onSuccess(data, status) // Si le XML se charge bien
+		{
+			var laChaine = data.split(';');
+			var nbBases = laChaine.length;
+			var bases = "";
+			var customerStatus = "";
+			
+			for(i = 1; i < nbBases; i = i + 1) // On parcourt la chaine envoyé par RecupXML pour avoir le(s) status et la/les BDD dispo de la personne qui se connecte
+			{
+				var listeBases = laChaine[i].split('/');
+				bases += ";" + listeBases[0];
+				customerStatus += ";" + listeBases[1];
+			}
+			lesBases = bases.split(';');
+			lesCustomers = customerStatus.split(';');
+			
+			if(nbBases == 1) //Si pas de base
+			{
+				document.forms['form'].elements['mail'].value = "";
+				$("<div class='ui-loader ui-overlay-shadow ui-body-e ui-corner-all'><h1>Cette adresse mail n'a accès à aucun portail.</h1></div>").css({ "display": "block", "opacity": 0.96, "top": $(window).scrollTop() + 100 })
+				  .appendTo( $.mobile.pageContainer )
+				  .delay( 40 )
+				  .fadeOut( 4000, function(){
+					$(this).remove();
+				  });
+			}
+			
+			else
+			{
+				$.cookie('cookie_mail', document.forms['form'].elements['mail'].value, { expires: 10000 }); // On garde l'adresse mail en cookie pour connexion auto
+				
+				$.ajax({
+				  type: "GET",
+				  url: "http://94.247.234.44/appmobile/data/lesBases.xml",
+				  data: "xml",
+				  success: function(xml)
+					{
+						selectBase(lesBases,lesCustomers);
+						
+						var leRDP = recupRdpUn(lesBases[1]);
+						afficheCat(lesBases[1],leRDP,lesCustomers[1]);
+					}
+				});
+				
+				//Changement de base
+				$("#menu").live("change", function() {
+					var laBase = $("#menu").val().split("_")[0];
+					var leStatus = $("#menu").val().split("_")[1];
+					var leRDP = recupRdpUn(laBase);
+					afficheCat(laBase,leRDP,leStatus);
+				});
+			}
+		}
+		
+		function onError(data, status)
+		{
+			alert("Erreur");
+		}
+		
+		//Récupère le premier RDP de la base
+		function recupRdpUn(nomBase)
+		{
+			if (nomBase == "cdcdbprod")
+			{
+				return "Groupe";
+			}
+			else
+			{
+				if((nomBase == "minecodbprod") || (nomBase == "minbuddbprod") || (nomBase == "fpublicdbprod"))
+				{
+					return "PQN";
+				}
+				
+				else
+				{
+					return "Panorama";
+				}
+			}
+		}
+		
+		//Affiche les onglets en fonction de la base
+		function afficheOnglet(idPage,idHeader,customer_status)
+		{
+			$("#laNavBar").remove(); //remise à zéro des onglets
+			$(idHeader).append('<div data-role="navbar" id="laNavBar" style="height:29%">');
+			$("#laNavBar").html('<ul id="rdp">');
+			
+			if (idPage == "cdcdbprod")
+			{
+				$("#rdp").html("<li><a href='#page-category' id='Groupe' onclick='afficheCat(\"" + idPage + "\", \"Groupe\",\"" + customer_status + "\")'>Groupe</a></li>");
+				$("#rdp").append("<li><a href='#page-category' id='Th&eacute;matique' onclick='afficheCat(\"" + idPage + "\", \"Th&eacute;matique\",\"" + customer_status + "\")'>Th&eacute;matique</a></li>");
+			}
+			else
+			{
+				if((idPage == "minecodbprod") || (idPage == "minbuddbprod") || (idPage == "fpublicdbprod"))
+				{
+					$("#rdp").html("<li><a href='#page-category' id='PQN' onclick='afficheCat(\"" + idPage + "\", \"PQN\",\"" + customer_status + "\")'>Nationale</a></li>");
+					$("#rdp").append("<li><a href='#page-category' id='PQR' onclick='afficheCat(\"" + idPage + "\", \"PQR\",\"" + customer_status + "\")'>Régionale</a></li>");
+					$("#rdp").append("<li><a href='#page-category' id='P&eacute;riodique' onclick='afficheCat(\"" + idPage + "\", \"P&eacute;riodique\",\"" + customer_status + "\")'>P&eacute;riodique</a></li>");
+					$("#rdp").append("<li><a href='#page-category' id='International' onclick='afficheCat(\"" + idPage + "\", \"International\",\"" + customer_status + "\")'>International</a></li>");
+				}
+			}
+			$("#laNavBar").append('</ul>');
+			$("#laNavBar").navbar();
+			$(idHeader).append('</div>');
+		}
+		
+		//Change le style de l'onglet sélectionné
+		function changeBtnActive(rdpSelect)
+		{
+			$(".ui-btn-active").removeClass("ui-btn-active");
+			$("#" + rdpSelect).addClass("ui-btn-active");
+		}
+		
+		function selectBase(desBases,customerStatus)
+		{
+			nbBases = desBases.length - 1;
+			
+			if (nbBases > 1)
+			{
+				$("#divBase").html("<center><form action='#' method='get' id='leForm' style='margin-top:-12px'>");
+					$("#leForm").append("<div data-role='fieldcontain' id='field'>");
+						$("#field").append("<select name='menu' id='menu' data-icon='arrow-d' data-inline='true' data-native-menu='false' data-theme='b'>");
+							for (var i=1; i<=nbBases; i++)
+							{
+								if (checkBase(desBases[i]) == false)
+								{
+									$("#menu").append("<option value='" + desBases[i] + "_" + customerStatus[i] + "' disabled='disabled'>" + getNomBase(desBases[i]) + "</option>");
+								}
+								else
+								{
+									$("#menu").append("<option value='" + desBases[i] + "_" + customerStatus[i] + "'>" + getNomBase(desBases[i]) + "</option>");
+								}
+							}
+						$("#field").append("</select>");
+					$("#leForm").append("</div>");
+				$("#divBase").append("</form></center>");
+				
+				if (window.location.href.split('#')[1] == "page-category")
+				{
+					$("#leForm").css("margin-top", "10px");
+					$('#menu').selectmenu();
+				}
+			}
+			else
+			{
+				$("#divBase").html("<center><span style='color:midnightblue;position:absolute;bottom:35%'>" + getNomBase(desBases[1]) + "</span></center>");
+			}
+		}
+		
+		function checkBase(nomBase)
+		{
+			var resu;
+			if (nomBase == "cdcdbprod")
+			{
+				$.ajax({
+					type: "GET",
+					url: "http://94.247.234.44/appmobile/data/" + nomBase + "_Groupe.xml",
+					data: "xml",
+					async: false,
+					success: function(Myxml)
+					{
+						resu = true;
+					},
+					
+					error: function()
+					{
+						$.ajax({
+							type: "GET",
+							url: "http://94.247.234.44/appmobile/data/" + nomBase + "_Thématique.xml",
+							data: "xml",
+							async: false,
+							success: function(Myxml)
+							{
+								resu = true;
+							},
+							
+							error: function()
+							{
+								resu = false;
+							}
+						});
+					}
+				});
+			}
+			else
+			{
+				if ((nomBase == "minecodbprod") || (nomBase == "minbuddbprod") || (nomBase == "fpublicdbprod"))
+				{
+					$.ajax({
+						type: "GET",
+						url: "http://94.247.234.44/appmobile/data/" + nomBase + "_PQN.xml",
+						data: "xml",
+						async: false,
+						success: function(Myxml)
+						{
+							resu = true;
+						},
+						
+						error: function()
+						{
+							$.ajax({
+								type: "GET",
+								url: "http://94.247.234.44/appmobile/data/" + nomBase + "_PQR.xml",
+								data: "xml",
+								async: false,
+								success: function(Myxml)
+								{
+									resu = true;
+								},
+								
+								error: function()
+								{
+									$.ajax({
+										type: "GET",
+										url: "http://94.247.234.44/appmobile/data/" + nomBase + "_Périodique.xml",
+										data: "xml",
+										async: false,
+										success: function(Myxml)
+										{
+											resu = true;
+										},
+										
+										error: function()
+										{
+											$.ajax({
+												type: "GET",
+												url: "http://94.247.234.44/appmobile/data/" + nomBase + "_International.xml",
+												data: "xml",
+												async: false,
+												success: function(Myxml)
+												{
+													resu = true;
+												},
+												
+												error: function()
+												{
+													resu = false;
+												}
+											});
+										}
+									});
+								}
+							});
+						}
+					});
+				}
+				else
+				{
+					$.ajax({
+						type: "GET",
+						url: "http://94.247.234.44/appmobile/data/" + nomBase + "_Panorama.xml",
+						data: "xml",
+						async: false,
+						success: function(Myxml)
+						{
+							resu = true;
+						},
+						
+						error: function()
+						{
+							resu = false;
+						}
+					});
+				}
+			}
+			return resu;
+		}
+		
+		//Affiche tous les articles d'un RDP
+		function afficheCat(nomBase,nomRDP,customer_status)
+		{
+			var ongletOld = $(".ui-btn-active").text();
+			$.ajax({
+				type: "POST",
+				url: "http://94.247.234.44/appmobile/data/" + nomBase + "_" + nomRDP + ".xml",
+				data: "xml",
+				success: function(Myxml)
+				{
+					var numLigne = 0;
+					var numCol = 0;
+					var numTab = 0;
+					
+					$.mobile.changePage("#page-category","slide");
+					
+					if(mySlider)
+					{
+						mySlider.destroyShow();
+					}
+					
+					$("#content-category").empty();
+					
+					$(Myxml).find("Category").each(function() //Pour chaque catégorie
+					{
+						var nomCate = $(this).text();
+						var idCat = $(this).attr("idCat");
+						var typeCat = $(this).attr("typeCat");
+						var nbArt = $(this).attr("nbArt");
+						
+						var ajouter = false;
+						
+						if (typeCat != 3)
+						{
+							/////////////////
+							if (numCol == 0)
+							{
+								if (numLigne%3 == 0)
+								{
+									document.getElementById("content-category").innerHTML += "<div id='div_" + numTab + "'><table id='tabCat" + numTab + "' style='margin:auto;' cellspacing='5px' cellpadding='0px'>";
+								}
+								document.getElementById("tabCat" + numTab).innerHTML += "<tr id='ligne_" + numLigne + "'>";
+							}
+							
+							newCat = replaceFunc(nomCate);
+							newCat = newCat.replace(/ /g,"_");
+							document.getElementById("ligne_" + numLigne).innerHTML += "<td><div style='position:relative;width:95px;height:95px;background-image:url(\"img_cat_phone/" + newCat + ".jpg\");cursor:pointer;' onclick='afficheArt(\"" + nomBase + "\",\"" + nomRDP + "\",\"" + idCat + "\",\"" + customer_status + "\")'><span style='position:absolute;color:white;left:0;bottom:0;background-color:black;opacity:0.7;width:100%;'>" + nomCate + "</span></div></td>";
+							ajouter = true;
+							/////////////////
+							
+							/*if (customer_status == "1" || customer_status == "1|99" )
+							{
+								if (typeCat != "2")
+								{
+									if (numCol == 0)
+									{
+										if (numLigne%3 == 0)
+										{
+											document.getElementById("content-category").innerHTML += "<div id='div_" + numTab + "'><table id='tabCat" + numTab + "' style='margin:auto;' cellspacing='5px' cellpadding='0px'>";
+										}
+										document.getElementById("tabCat" + numTab).innerHTML += "<tr id='ligne_" + numLigne + "'>";
+									}
+									
+									newCat = replaceFunc(nomCate);
+									newCat = newCat.replace(/ /g,"_");
+									document.getElementById("ligne_" + numLigne).innerHTML += "<td><div style='position:relative;width:95px;height:95px;background-image:url(\"img_cat_phone/" + newCat + ".jpg\");cursor:pointer;' onclick='afficheArt(\"" + nomBase + "\",\"" + nomRDP + "\",\"" + idCat + "\",\"" + customer_status + "\")'><span style='position:absolute;color:white;left:0;bottom:0;background-color:black;opacity:0.7;width:100%;'>" + nomCate + "</span></div></td>";
+									ajouter = true;
+								}
+							}
+							else
+							{
+								if (customer_status != "0")
+								{
+									if (numCol == 0)
+									{
+										if (numLigne%3 == 0)
+										{
+											document.getElementById("content-category").innerHTML += "<div id='div_" + numTab + "'><table id='tabCat" + numTab + "' style='margin:auto;' cellspacing='5px' cellpadding='0px'>";
+										}
+										document.getElementById("tabCat" + numTab).innerHTML += "<tr id='ligne_" + numLigne + "'>";
+									}
+									
+									newCat = replaceFunc(nomCate);
+									newCat = newCat.replace(/ /g,"_");
+									document.getElementById("ligne_" + numLigne).innerHTML += "<td><div style='position:relative;width:95px;height:95px;background-image:url(\"img_cat_phone/" + newCat + ".jpg\");cursor:pointer;' onclick='afficheArt(\"" + nomBase + "\",\"" + nomRDP + "\",\"" + idCat + "\",\"" + customer_status + "\")'><span style='position:absolute;color:white;left:0;bottom:0;background-color:black;opacity:0.7;width:100%;'>" + nomCate + "</span></div></td>";
+									ajouter = true;
+								}
+							}*/
+						}
+						
+						if (ajouter == true)
+						{
+							numCol = numCol + 1;
+							if (numCol == 3)
+							{
+								document.getElementById("tabCat" + numTab).innerHTML += "</tr>";
+								numCol = 0;
+								numLigne = numLigne + 1;
+								if (numLigne%3 == 0)
+								{
+									document.getElementById("content-category").innerHTML += "</table></div>";
+									numTab = numTab + 1;
+								}
+							}
+						}
+						
+					});
+					
+					document.getElementById("content-category").innerHTML += "</table></div>";
+					afficheOnglet(nomBase,"#headerArt",customer_status);
+					changeBtnActive(nomRDP);
+					mySlider = $('#content-category').bxSlider({ infiniteLoop: false, controls: false });
+					checkOnglet(nomBase);
+					afficheImgPage();
+				},
+				
+				error: function()
+				{
+					$('#' + nomRDP).addClass('ui-disabled');
+					testAutresRdp(nomBase,customer_status,ongletOld);
+				}
+			});
+		}
+		
+		function afficheImgPage()
+		{
+			$("#pageIndex").html("");
+			var slideMax = mySlider.getSlideCount();
+			if (slideMax > 1)
+			{
+				for (var maPage = 0; maPage < slideMax; maPage++)
+				{
+					var slideEnCours = mySlider.getCurrentSlide();
+					var lesImages = "";
+					for (var maVarImg = 0; maVarImg < slideMax; maVarImg++)
+					{
+						if (maVarImg == slideEnCours)
+						{
+							lesImages += "<img src='img_source/carre_plein.jpg' style='margin:2px;'/>";
+						}
+						else
+						{
+							lesImages += "<img src='img_source/carre_vide.gif' style='margin:2px;'/>";
+						}
+					}
+					$("#pageIndex").html(lesImages);
+				}
+			}
+		}
+		
+		function checkOnglet(nomBase)
+		{
+			if (nomBase == "cdcdbprod")
+			{
+				$.ajax({
+					type: "POST",
+					url: "http://94.247.234.44/appmobile/data/" + nomBase + "_Groupe.xml",
+					data: "xml",
+					error: function()
+					{
+						$('#Groupe').addClass('ui-disabled');
+					}
+				});
+				
+				$.ajax({
+					type: "POST",
+					url: "http://94.247.234.44/appmobile/data/" + nomBase + "_Thématique.xml",
+					data: "xml",
+					error: function()
+					{
+						$('#Thématique').addClass('ui-disabled');
+					}
+				});
+			}
+			else
+			{
+				if ((nomBase == "minecodbprod") || (nomBase == "minbuddbprod") || (nomBase == "fpublicdbprod"))
+				{
+					$.ajax({
+						type: "POST",
+						url: "http://94.247.234.44/appmobile/data/" + nomBase + "_PQN.xml",
+						data: "xml",
+						error: function()
+						{
+							$('#PQN').addClass('ui-disabled');
+						}
+					});
+					
+					$.ajax({
+						type: "POST",
+						url: "http://94.247.234.44/appmobile/data/" + nomBase + "_PQR.xml",
+						data: "xml",
+						error: function()
+						{
+							$('#PQR').addClass('ui-disabled');
+						}
+					});
+					
+					$.ajax({
+						type: "POST",
+						url: "http://94.247.234.44/appmobile/data/" + nomBase + "_Périodique.xml",
+						data: "xml",
+						error: function()
+						{
+							$('#Périodique').addClass('ui-disabled');
+						}
+					});
+					
+					$.ajax({
+						type: "POST",
+						url: "http://94.247.234.44/appmobile/data/" + nomBase + "_International.xml",
+						data: "xml",
+						error: function()
+						{
+							$('#International').addClass('ui-disabled');
+						}
+					});
+				}
+				else
+				{
+					$.ajax({
+						type: "POST",
+						url: "http://94.247.234.44/appmobile/data/" + nomBase + "_Panorama.xml",
+						data: "xml",
+						error: function()
+						{
+							$('#Panorama').addClass('ui-disabled');
+						}
+					});
+				}
+			}
+		}
+		
+		//Test RDP vide
+		function testAutresRdp(nomBase,customer_status,ongletOld)
+		{
+			if (window.location.href.split('#')[1] != "page-category")
+			{
+				if (nomBase == "cdcdbprod")
+				{
+					$.ajax({
+						type: "POST",
+						url: "http://94.247.234.44/appmobile/data/" + nomBase + "_Thématique.xml",
+						data: "xml",
+						success: function(Myxml)
+						{
+							afficheCat(nomBase,"Thématique",customer_status);
+						},
+						
+						error: function()
+						{
+							$("<div class='ui-loader ui-overlay-shadow ui-body-e ui-corner-all'><h1>Pas d'articles aujourd'hui pour ce portail.</h1></div>").css({ "display": "block", "opacity": 0.96, "top": $(window).scrollTop() + 100 })
+							  .appendTo( $.mobile.pageContainer )
+							  .delay( 40 )
+							  .fadeOut( 4000, function(){
+								$(this).remove();
+							});
+						}
+					});
+				}
+				else
+				{
+					if ((nomBase == "minecodbprod") || (nomBase == "minbuddbprod") || (nomBase == "fpublicdbprod"))
+					{
+						$.ajax({
+							type: "POST",
+							url: "http://94.247.234.44/appmobile/data/" + nomBase + "_PQR.xml",
+							data: "xml",
+							success: function(Myxml)
+							{
+								afficheCat(nomBase,"PQR",customer_status);
+							},
+							
+							error: function()
+							{
+								$.ajax({
+									type: "POST",
+									url: "http://94.247.234.44/appmobile/data/" + nomBase + "_Périodique.xml",
+									data: "xml",
+									success: function(Myxml)
+									{
+										afficheCat(nomBase,"Périodique",customer_status);
+									},
+									
+									error: function()
+									{
+										$.ajax({
+											type: "POST",
+											url: "http://94.247.234.44/appmobile/data/" + nomBase + "_International.xml",
+											data: "xml",
+											success: function(Myxml)
+											{
+												afficheCat(nomBase,"International",customer_status);
+											},
+											
+											error: function()
+											{
+												$("<div class='ui-loader ui-overlay-shadow ui-body-e ui-corner-all'><h1>Pas d'articles aujourd'hui pour ce portail.</h1></div>").css({ "display": "block", "opacity": 0.96, "top": $(window).scrollTop() + 100 })
+												  .appendTo( $.mobile.pageContainer )
+												  .delay( 40 )
+												  .fadeOut( 4000, function(){
+													$(this).remove();
+												});
+											}
+										});
+									}
+								});
+							}
+						});
+					}
+					else
+					{
+						$("<div class='ui-loader ui-overlay-shadow ui-body-e ui-corner-all'><h1>Pas d'articles aujourd'hui pour ce portail.</h1></div>").css({ "display": "block", "opacity": 0.96, "top": $(window).scrollTop() + 100 })
+						  .appendTo( $.mobile.pageContainer )
+						  .delay( 40 )
+						  .fadeOut( 4000, function(){
+							$(this).remove();
+						});
+					}
+				}
+			}
+			else
+			{
+				if (nomBase == "cdcdbprod")
+				{
+					$.ajax({
+						type: "POST",
+						url: "http://94.247.234.44/appmobile/data/" + nomBase + "_" + ongletOld + ".xml",
+						data: "xml",
+						success: function(Myxml)
+						{
+							afficheCat(nomBase,ongletOld,customer_status);
+						}
+					});
+				}
+				else
+				{
+					if ((nomBase == "minecodbprod") || (nomBase == "minbuddbprod") || (nomBase == "fpublicdbprod"))
+					{
+						$.ajax({
+							type: "POST",
+							url: "http://94.247.234.44/appmobile/data/" + nomBase + "_" + ongletOld + ".xml",
+							data: "xml",
+							success: function(Myxml)
+							{
+								afficheCat(nomBase,ongletOld,customer_status);
+							}
+						});
+					}
+				}
+			}
+		}
+		
+		//Affiche les articles d'une catégorie
+		function afficheArt(nomBase,nomRDP,idCat,customer_status)
+		{
+			$("#content-description").html("<ul id='liste-description' class='gallery'></ul>");
+			$.ajax({
+				type: "POST",
+				url: "http://94.247.234.44/appmobile/data/" + nomBase + "_" + nomRDP + "_" + idCat + ".xml",
+				data: "xml",
+				success: function(Myxml)
+				{
+					var chaineArtPdf = "";
+					
+					$.mobile.changePage("#page-article", "slide");
+					
+					//On retire "dbprod" du nom de la base
+					nomBase = nomBase.substring(0,nomBase.length-6);
+					
+					document.getElementById("content-article").innerHTML = "<ul data-role='listview' id='mesArt'>";
+					
+					var leNomCate = $(Myxml).find("mesArt").attr("nomCate");
+					var nbArticle = $(Myxml).find("mesArt").attr("nbArt");
+					$("#headerTitreCat").html("<ul id='monTitre'><li data-role='list-divider' style='position:absolute;left:0;right:0;top:0;text-align:center;'>" + leNomCate + "<span class='ui-li-count'>" + nbArticle + "</span></li></ul>");
+					
+					var elementsListe = "";
+					
+					$(Myxml).find("Article").each(function() //Pour chaque article dans la catégorie
+					{
+						var idArt = $(this).attr("idArt");
+						var unTitre = $(this).find("Titre").text();
+						var uneDate = $(this).find("Date").text();
+						var tabDate = uneDate.split('-');
+						var laDate = tabDate[2] + "/" + tabDate[1] + "/" + tabDate[0];
+						var uneSource = $(this).find("Source").text();
+						var uneSourceImg = replaceFunc(uneSource);
+						uneSourceImg = uneSourceImg.replace(/ /g,"_");
+						
+						var typeArt = $(this).attr("typeArt");
+						
+						if (typeArt == "pdf")
+						{
+							elementsListe += "<li><a href='#' onclick='afficheDesc(\"" + nomBase + "\",\"" + nomRDP + "\",\"" + idCat + "\",\"" + idArt + "\")'><img style='top:15px;left:15px;width:45px;height:45px;' id='" + idArt + "' src='img_source/" + uneSourceImg + ".jpg'><h3 style='white-space:normal;font-size:small;margin-left:-35px'>" + unTitre + " - <i>" + laDate + "</i></h3></a></li>";
+							
+							chaineArtPdf = chaineArtPdf + idArt + "---" + unTitre + ";;;";
+						}
+						else
+						{
+							elementsListe += "<li data-icon='arrow-d'><a href='#' onclick='afficheDescTxt(\"" + idArt + "\")'><img style='top:15px;left:15px;width:45px;height:45px;' id='" + idArt + "' src='img_source/" + uneSourceImg + ".jpg'><h3 style='white-space:normal;font-size:small;margin-left:-35px'>" + unTitre + " - <i>" + laDate + "</i></h3></a></li>";
+							
+							var newDesc;
+							$.ajax({
+								type: "POST",
+								url: "http://94.247.234.44/appmobile/data/" + nomBase + "dbprod_" + nomRDP + "_" + idCat + "_" + idArt + ".xml",
+								data: "xml",
+								async: false,
+								success: function(xml)
+								{
+									var uneDesc = $(xml).find("Description").text();
+									newDesc = formatTexte(uneDesc);
+								},
+								
+								error: function()
+								{
+									alert("erreur");
+								}
+							});
+							
+							elementsListe += "<li id='contenuArtTxt" + idArt + "' class='cache' style='background:#CEE3F6'><div style='font-family:Times New Roman;font-size:20px;text-align:justify;'>" + newDesc + "</div><br/><br/><div style='text-align:right'><i>" + uneSource + "</i></div></li>";
+						}
+					});
+					
+					document.getElementById("content-article").innerHTML += "</ul>";
+					$("#mesArt").html(elementsListe);
+					$(".cache").hide();
+					
+					$("#monTitre").listview();
+					$("#mesArt").listview();
+					myScrollArt.refresh();
+					
+					btPrecSuiv(nomBase + "dbprod",nomRDP,idCat,customer_status);
+					
+					var tabArtPdf = chaineArtPdf.split(";;;");
+					var tailleTabArtPdf = tabArtPdf.length;
+					
+					if (tailleTabArtPdf < 3)
+					{
+						recupPdf(nomBase,tabArtPdf,0,tailleTabArtPdf,1);
+					}
+					else
+					{
+						var numImg = recupPdf(nomBase,tabArtPdf,0,2,1);
+						
+						setTimeout(function(){recupPdf(nomBase,tabArtPdf,2,tailleTabArtPdf,numImg)}, 2000);
+					}
+				}
+			});
+		}
+		
+		function recupPdf(nomBase,tabArt,tailleForDebut,tailleForFin,numImg)
+		{
+			var numImage = numImg;
+			for (var i_art = tailleForDebut; i_art < tailleForFin; i_art++)
+			{
+				var idArt = tabArt[i_art].split("---")[0];
+				//L'id de l'article doit avoir 6 chiffres pour les pdf et vidéos
+				if (idArt.length == 5)
+				{
+					idArt = "0" + idArt;
+				}
+				else
+				{
+					if (idArt.length == 4)
+					{
+						idArt = "00" + idArt;
+					}
+				}
+				
+				$.ajax({
+					url:'http://94.247.234.44/appmobile/client/' + nomBase + '/' + idArt + '-0.png',
+					type:'HEAD',
+					async:false,
+					success: function() //Vérifier existence du pdf
+					{
+						i = 0;
+						verif = false;
+						
+						while(verif == false)
+						{
+							$.ajax({
+								url:'http://94.247.234.44/appmobile/client/' + nomBase + '/' + idArt + '-' + i + '.png',
+								type:'HEAD',
+								async:false,
+								success: function()
+								{
+									var newTitre = tabArt[i_art].split("---")[1].replace(/'/g,"&apos;");
+									newTitre = newTitre.replace(/-/g,"&#45;");
+									$("#liste-description").append("<li id='" + numImage + "' class='" + idArt + "'><a href='http://94.247.234.44/appmobile/client/" + nomBase + "/" + idArt + "-" + i + ".png' rel='external'><img src='http://94.247.234.44/appmobile/client/" + nomBase + "/" + idArt + "-" + i + ".png' alt='" + newTitre + "' /></a></li>");
+									numImage = numImage + 1;
+								},
+								
+								error: function()
+								{
+									verif = true;
+								}
+							});
+
+							i = i + 1;
+						}
+					}
+				});
+			}
+			return numImage;
+		}
+		
+		function btPrecSuiv(nomBase,nomRDP,idCat,customer_status)
+		{
+			var mesCateg = "";
+			var idCatPrec;
+			var idCatSuiv;
+			
+			$.ajax({
+				type: "POST",
+				url: "http://94.247.234.44/appmobile/data/" + nomBase + "_" + nomRDP + ".xml",
+				data: "xml",
+				async: false,
+				success: function(Myxml)
+				{
+					$(Myxml).find("Category").each(function() //Pour chaque catégorie
+					{
+						var numCat = $(this).attr("idCat");
+						var typeCat = $(this).attr("typeCat");
+						
+						if (typeCat != 3)
+						{
+							if (customer_status == "1" || customer_status == "1|99" )
+							{
+								if (typeCat != "2")
+								{
+									mesCateg = mesCateg + numCat + ";";
+								}
+							}
+							else
+							{
+								if (customer_status != "0")
+								{
+									mesCateg = mesCateg + numCat + ";";
+								}
+							}
+						}
+					});
+					
+					var tabCat = mesCateg.split(";");
+					var boolCat = false;
+					var tailleTab = tabCat.length - 1;
+					var i = 0;
+					
+					while (boolCat == false && i < tailleTab)
+					{
+						var uneCat = tabCat[i];
+						if (uneCat == idCat)
+						{
+							if (i > 0)
+							{
+								idCatPrec = tabCat[i - 1];
+							}
+							else
+							{
+								idCatPrec = false;
+							}
+							
+							if (i < tailleTab - 1)
+							{
+								idCatSuiv = tabCat[i + 1];
+							}
+							else
+							{
+								idCatSuiv = false;
+							}
+							boolCat = true;
+						}
+						i = i + 1;
+					}
+					
+					$("#catPrec").attr("onclick", "afficheArt(\"" + nomBase + "\",\"" + nomRDP + "\",\"" + idCatPrec + "\",\"" + customer_status + "\")");
+					$("#catSuiv").attr("onclick", "afficheArt(\"" + nomBase + "\",\"" + nomRDP + "\",\"" + idCatSuiv + "\",\"" + customer_status + "\")");
+					
+					if (idCatPrec == false)
+					{
+						$("#catPrec").hide();
+					}
+					else
+					{
+						$("#catPrec").show();
+					}
+					
+					if (idCatSuiv == false)
+					{
+						$("#catSuiv").hide();
+					}
+					else
+					{
+						$("#catSuiv").show();
+					}
+				}
+			});
+		}
+		
+		//Affiche le contenu d'un article (pdf, vidéo, texte)
+		function afficheDesc(nomBase,nomRDP,numCat,numArt)
+		{
+			//L'id de l'article doit avoir 6 chiffres pour les pdf et vidéos
+			if (numArt.length == 5)
+			{
+				numArt = "0" + numArt;
+			}
+			else
+			{
+				if (numArt.length == 4)
+				{
+					numArt = "00" + numArt;
+				}
+			}
+			
+			$.ajax({
+			  url: 'http://94.247.234.44/appmobile/client/' + nomBase + '/' + numArt + '-0.png',
+			  type: "HEAD",
+			  success: function()
+				{
+					options = {
+						enableMouseWheel: false,
+						enableKeyboard: false,
+						loop:false,
+						captionAndToolbarAutoHideDelay: 0,
+						getToolbar: function(){
+							return "<div class='ps-toolbar-close' style='padding-top: 12px;'>Fermer</div><div class='ps-toolbar-previous' style='padding-top: 12px;'>Précédent</div><div class='ps-toolbar-next' style='padding-top: 12px;'>Suivant</div>";
+						}
+					};
+					
+					var monId = document.getElementsByClassName(numArt)[0].id;
+					var myPhotoSwipe = $(".gallery a").photoSwipe(options);
+					myPhotoSwipe.show(monId - 1);
+				},
+				
+				error: function()
+				{
+					$.ajax({
+						url:'http://94.247.234.44/appmobile/client/' + nomBase + '/' + numArt + '.flv',
+						type:'HEAD',
+						success: function()
+						{
+							$.mobile.changePage("#page-description", "slide");
+							$("#content-description").html("<center><embed width='auto' height='80%' autoplay='false' wmode='transparent' quality='high' bgcolor='#ffffff' name='movie_player_2' id='movie_player_2' src='http://malsup.github.com/mediaplayer.swf?file=http://213.215.34.214/" + nomBase + "/blog/archives/" + numArt + ".flv' type='application/x-shockwave-flash'/></center>");
+						},
+						error: function()
+						{
+							alert("Fichier indisponible");
+						}
+					});
+				}
+			});
+		}
+		
+		//Affiche un article texte
+		function afficheDescTxt(idArt)
+		{
+			if ($("#contenuArtTxt" + idArt).hasClass("affiche"))
+			{
+				$("#contenuArtTxt" + idArt).slideUp("slow");
+				$("#contenuArtTxt" + idArt).addClass("cache");
+				$("#contenuArtTxt" + idArt).removeClass("affiche");
+			}
+			else
+			{
+				if ($(".affiche")[0])
+				{
+					$(".affiche").slideUp("slow");
+					$(".affiche").addClass("cache");
+					$(".affiche").removeClass("affiche");
+				}
+				$("#contenuArtTxt" + idArt).slideDown("slow");
+				$("#contenuArtTxt" + idArt).removeClass("cache");
+				$("#contenuArtTxt" + idArt).addClass("affiche");
+			}
+		}
+		
+		function getNomBase(unNom)
+		{
+			var resu;
+			$.ajax({
+			  type: "GET",
+			  url: "http://94.247.234.44/appmobile/data/lesBases.xml",
+			  data: "xml",
+			  async: false,
+			  success: function(xml)
+				{
+					$(xml).find("database").each(function()
+					{
+						var maBase = $(this).attr("nomBase");
+						var portail = $(this).text();
+						if (maBase == unNom)
+						{
+							resu = portail;
+						}
+					});
+				}
+			});
+			return resu;
+		}
+		
+		//Mise en forme des articles textes
+		function formatTexte(texte)
+		{
+			remplace = texte.split("\n").length;
+			
+			for(i=0; i<remplace; i++)
+			{
+				texte = texte.replace("\n","<br>");
+			}
+			
+			var position = texte.indexOf("Tous droits réservés :");
+			var cutter = texte.substr(position);
+			
+			texte = texte.replace(cutter,"");
+			
+			return texte;
+		}
+		
+		//Renvoie les infos (portail et statut) de l'utilisateur sous forme de chaine
+		$(document).ready(function()
+		{
+			$("#btSubmit").click(function(){
+				var formData = $("#form").serialize();
+ 
+				$.ajax({
+					type: "POST",
+					url: "http://94.247.234.44/appmobile/script/RecupXML.php",
+					cache: false,
+					data: formData,
+					success: onSuccess,
+					error: onError
+				});
+				return false;
+			});
+			
+			$('#swipe').live('swipeleft',function(){
+				mySlider.goToNextSlide();
+			});
+			
+			$('#swipe').live('swiperight',function(){
+				mySlider.goToPreviousSlide();
+			});
+			
+			$('#swipe').live('swiperight swipeleft',function(){	
+				afficheImgPage();
+			});
+		});
+		
+		</script>
+		
+	</head>
+
+	<body>
+
+		<!-- Start of first page -->
+		<div data-role="page" id="page-logo" style="background:white">
+			<center>
+				<img src="up2news.gif" alt="Up2News" style="margin:auto; position:absolute; top:0px; bottom:0px; left:0px; right:0px; height:auto; width:70%;" />
+			</center>
+		</div><!-- /page -->
+		
+		<!-- Start of connexion page -->
+		<div data-role="page" id="page-connexion" style="background:white">
+			<div data-role="header" style="background:#61A4AB">
+				<a href="#" style="display:none"></a>
+				<h1> Up2News Mobile </h1>
+			</div><!-- /header -->
+		
+			<div data-role="content">
+				<form action="" id="form" style="text-align: center">
+					<label for="mail"> Veuillez entrer votre adresse mail : </label>
+					<br><br>
+					<input type="email" name="mail" id="mail" value="toto@toto.fr" required />
+					<br><br>
+					<input type="submit" id="btSubmit" name="btSubmit" value="Valider" data-icon="check" data-theme="b" />
+				</form>
+			</div><!-- /content -->
+		
+			<div data-role="footer" style="background:#61A4AB">
+				<h4> Les services d'INFO - Intelligence </h4>
+			</div><!-- /footer -->
+		</div><!-- /page -->
+		
+		<!-- Start of category page -->
+		<div data-role="page" style="background:url(fond.jpg)" id="page-category">
+			<div data-role="header" id="headerArt" style="height:17%;background:white">
+				<center><img src="up2news.gif" height="71%" /></center>
+			</div><!-- /header -->
+			
+			<div data-role="content" style="position:absolute;top:20%;bottom:10%;left:0;right:0;">
+				<div id="swipe" style="top">
+					<div id="content-category">
+					</div>
+					<center><div id="pageIndex">
+					</div></center>
+				</div>
+			</div>
+			
+			<div data-role="footer" id="divBase" style="background:lightblue;position:absolute;bottom:0;height:10%;">
+			</div>
+		</div><!-- /page -->
+		
+		<!-- Start of article page -->
+		<div data-role="page" id="page-article">
+			<div data-role="header" id="headerTitreCat" style="position:absolute;top:0;left:0;right:0;height:4.5%;">
+			</div>
+			
+			<div data-role="content" id="wrapperArt" style="position:absolute;top:4.5%;bottom:9.5%;left:0;right:0;">
+				<div id="content-article">
+				</div>
+			</div>
+			
+			<div data-role="footer" style="position:absolute;bottom:0;height:9.5%;background:lightblue">
+				<center>
+					<a id="catPrec" data-role="button"  data-theme="b" style="float:left;margin-left:5px;margin-top:10px">Cat prec.</a>
+					<a href="#page-category" data-role="button" data-theme="b" data-direction="reverse" style="margin-top:10px">Retour</a>
+					<a id="catSuiv" data-role="button"  data-theme="b" style="float:right;margin-right:5px;margin-top:10px">Cat suiv.</a>
+				</center>
+			</div>
+			
+		</div><!-- /page -->
+		
+		<!-- Start of description page -->
+		<div data-role="page" style="background:white" id="page-description" class="gallery-page">
+		
+			<div data-role="header" style="background:#61A4AB" id="headerDesc">
+				<a href="#page-article" data-icon="arrow-l" data-theme="b" data-iconpos="notext" data-direction="reverse"></a>
+				<h1>Up2News Mobile</h1>
+			</div><!-- /header -->
+
+			<div data-role="content" id="content-description">
+			</div>
+			
+		</div><!-- /page -->
+
+	</body>
+</html>
